@@ -1,5 +1,4 @@
-# Gesture Synthesizer Engine
-# Кинетограф (Kinetograf) - "Cinetógrafo" (combinando "kinet-" de movimiento y "-graf" de gráfico)
+# Кинетограф Gesture Synthesizer Engine
 
 A real-time gesture-controlled audio synthesizer that uses computer vision to track hand movements and generate sound through FM synthesis. Built with Web Audio API, MediaPipe Hands, and SharedArrayBuffer for ultra-low latency performance.
 
@@ -242,4 +241,5 @@ Contributions welcome! Areas of interest:
 - **Web Audio API**: W3C audio processing standard
 - **SharedArrayBuffer**: Modern web concurrency primitive
 - **Tailwind CSS**: Utility-first CSS framework</content>
+
 <parameter name="filePath">c:\Users\Krank\Local\archive gesture-engine-shared-buffer\README.md
