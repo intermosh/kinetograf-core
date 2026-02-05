@@ -241,7 +241,3 @@ Contributions welcome! Areas of interest:
 - **Web Audio API**: W3C audio processing standard
 - **SharedArrayBuffer**: Modern web concurrency primitive
 - **Tailwind CSS**: Utility-first CSS framework</content>
-
-<parameter name="filePath">c:\Users\Krank\Local\archive gesture-engine-shared-buffer\README.md
-
-
