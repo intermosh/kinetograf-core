@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GestureSynth Engine</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Configuración personalizada de Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
+                        sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { 
+            background-color: #050508; 
+            color: #cbd5e1; /* slate-300 */
+        }
+        ::selection {
+            background-color: rgba(6, 182, 212, 0.3); /* cyan-500/30 */
+        }
+        /* Custom scrollbar for code block */
+        ::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e1e24; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased selection:bg-cyan-500/30">
+
+    <!-- Navigation -->
+    <nav id="navbar" class="fixed w-full z-50 transition-all duration-300 border-b bg-transparent border-transparent py-6">
+        <div class="container mx-auto px-6 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i data-lucide="activity" class="text-cyan-400 w-6 h-6"></i>
+                <span class="text-xl font-bold tracking-tight text-white">Gesture<span class="text-cyan-400">Synth</span> Engine</span>
+            </div>
+            <div class="hidden md:flex gap-8 text-sm font-medium">
+                <a href="#features" class="hover:text-cyan-400 transition-colors">Funcionalidad</a>
+                <a href="#architecture" class="hover:text-cyan-400 transition-colors">Arquitectura</a>
+                <a href="#tech" class="hover:text-cyan-400 transition-colors">Specs</a>
+            </div>
+            <button class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 px-4 py-2 rounded-full text-sm font-semibold transition-all hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] cursor-pointer">
+                Ver Demo
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
+        <!-- Background Gradients -->
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-cyan-500/20 rounded-full blur-[120px] -z-10 opacity-50"></div>
+        <div class="absolute bottom-0 right-0 w-[600px] h-[400px] bg-indigo-500/10 rounded-full blur-[100px] -z-10"></div>
+
+        <div class="container mx-auto px-6 text-center">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/50 border border-slate-700 text-xs font-mono text-cyan-400 mb-6">
+                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                SYSTEM STATUS: ONLINE
+            </div>
+            <h1 class="text-5xl md:text-7xl font-bold text-white mb-6 tracking-tight leading-tight">
+                Síntesis de Audio <br/>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-400">Sin Latencia</span>
+            </h1>
+            <p class="text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+                Un motor de audio experimental impulsado por visión computarizada. 
+                Convierte gestos manuales en síntesis FM en tiempo real utilizando 
+                <span class="text-white font-mono bg-slate-800 px-2 py-0.5 rounded mx-1">SharedArrayBuffer</span>
+                para un flujo de datos libre de bloqueos.
+            </p>
+            
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <button class="flex items-center justify-center gap-2 bg-white text-black px-8 py-4 rounded-lg font-bold hover:bg-slate-200 transition-colors cursor-pointer">
+                    Iniciar Motor
+                    <i data-lucide="zap" class="w-4 h-4"></i>
+                </button>
+                <button class="flex items-center justify-center gap-2 bg-slate-800 text-white px-8 py-4 rounded-lg font-bold hover:bg-slate-700 transition-colors border border-slate-700 cursor-pointer">
+                    Ver Código Fuente
+                    <i data-lucide="code" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features Grid -->
+    <section id="features" class="py-20 bg-[#0a0a0f] border-t border-slate-900">
+        <div class="container mx-auto px-6">
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-800 hover:border-slate-600 transition-colors">
+                    <div class="mb-4 bg-slate-800/50 w-fit p-3 rounded-lg">
+                        <i data-lucide="hand" class="text-cyan-400 w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Tracking de Manos</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Detección precisa de landmarks utilizando MediaPipe. Rastrea posición y gestos de 'pinch' a 30fps.
+                    </p>
+                </div>
+                <!-- Feature 2 -->
+                <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-800 hover:border-slate-600 transition-colors">
+                    <div class="mb-4 bg-slate-800/50 w-fit p-3 rounded-lg">
+                        <i data-lucide="cpu" class="text-indigo-400 w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Síntesis FM</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Generación de ondas sinusoidales moduladas directamente en el hilo de audio a 44.1kHz.
+                    </p>
+                </div>
+                <!-- Feature 3 -->
+                <div class="bg-slate-900/50 p-6 rounded-xl border border-slate-800 hover:border-slate-600 transition-colors">
+                    <div class="mb-4 bg-slate-800/50 w-fit p-3 rounded-lg">
+                        <i data-lucide="maximize-2" class="text-emerald-400 w-6 h-6"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Control Gestual</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Posición X/Y controla la frecuencia. La distancia de pellizco (Pinch) controla la ganancia y modulación.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Architecture Deep Dive -->
+    <section id="architecture" class="py-24 relative">
+        <div class="container mx-auto px-6">
+            <div class="mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Arquitectura Multihilo</h2>
+                <p class="text-slate-400 max-w-2xl">
+                    La mayoría de las apps web sufren latencia al pasar mensajes entre hilos. 
+                    GestureSynth elimina este problema creando una memoria compartida directa.
+                </p>
+            </div>
+
+            <!-- Architecture Diagram Visualization -->
+            <div class="relative bg-slate-900/50 border border-slate-800 rounded-2xl p-8 md:p-12 overflow-hidden">
+                <div class="absolute inset-0 opacity-5 pointer-events-none" style="background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIklEQVQIW2NkQAKrVq36zwjjgzjwqheq4f///4CYCNIIkAQAt9Ymc7y+ss8AAAAASUVORK5CYII=');"></div>
+                
+                <div class="grid lg:grid-cols-3 gap-8 items-center relative z-10">
+                    
+                    <!-- Main Thread Node -->
+                    <div class="bg-[#0f111a] border border-slate-700 p-6 rounded-xl relative group hover:border-cyan-500/50 transition-colors">
+                        <div class="absolute -top-3 left-6 bg-slate-800 text-xs px-2 py-1 rounded text-slate-300 font-mono">MAIN THREAD</div>
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="p-3 bg-cyan-500/10 rounded-lg">
+                                <i data-lucide="layers" class="text-cyan-400 w-6 h-6"></i>
+                            </div>
+                            <span class="text-xs font-mono text-slate-500">30Hz Update</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-2">Visión & Lógica</h3>
+                        <ul class="space-y-2 text-sm text-slate-400">
+                            <li class="flex items-center gap-2">✓ MediaPipe Hands</li>
+                            <li class="flex items-center gap-2">✓ Renderizado Canvas</li>
+                            <li class="flex items-center gap-2">✓ Input de Cámara</li>
+                        </ul>
+                    </div>
+
+                    <!-- Connector -->
+                    <div class="flex flex-col items-center justify-center text-center space-y-2">
+                        <div class="h-0.5 w-full bg-gradient-to-r from-cyan-500/20 via-emerald-500/50 to-indigo-500/20 relative">
+                            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#050508] px-4 py-1 border border-slate-700 rounded-full text-xs font-mono text-emerald-400 whitespace-nowrap z-10">
+                                SharedArrayBuffer (32 Bytes)
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 max-w-[200px]">
+                            Memoria física compartida. Lectura/Escritura sin bloqueo (Lock-free).
+                        </p>
+                    </div>
+
+                    <!-- Audio Thread Node -->
+                    <div class="bg-[#0f111a] border border-slate-700 p-6 rounded-xl relative group hover:border-indigo-500/50 transition-colors">
+                        <div class="absolute -top-3 left-6 bg-slate-800 text-xs px-2 py-1 rounded text-slate-300 font-mono">AUDIO WORKLET</div>
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="p-3 bg-indigo-500/10 rounded-lg">
+                                <i data-lucide="activity" class="text-indigo-400 w-6 h-6"></i>
+                            </div>
+                            <span class="text-xs font-mono text-slate-500">44.1kHz Read</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-white mb-2">Síntesis DSP</h3>
+                        <ul class="space-y-2 text-sm text-slate-400">
+                            <li class="flex items-center gap-2">✓ Osciladores FM</li>
+                            <li class="flex items-center gap-2">✓ Lectura Directa SAB</li>
+                            <li class="flex items-center gap-2">✓ Buffer sin GC</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Code Breakdown -->
+    <section id="tech" class="py-20 bg-[#0a0a0f]">
+        <div class="container mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+                <h2 class="text-3xl font-bold text-white mb-6">Implementación Técnica</h2>
+                <div class="space-y-6">
+                    <!-- Tech Item 1 -->
+                    <div class="flex gap-4">
+                        <div class="mt-1">
+                            <i data-lucide="shield-check" class="text-emerald-500 w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-white font-bold">SharedArrayBuffer</h4>
+                            <p class="text-slate-400 text-sm mt-1">Permite que el hilo principal escriba las coordenadas de la mano y el AudioWorklet las lea instantáneamente sin la sobrecarga de postMessage().</p>
+                        </div>
+                    </div>
+                    <!-- Tech Item 2 -->
+                    <div class="flex gap-4">
+                        <div class="mt-1">
+                            <i data-lucide="shield-check" class="text-emerald-500 w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-white font-bold">Cross-Origin Isolation</h4>
+                            <p class="text-slate-400 text-sm mt-1">Headers COOP y COEP habilitados para desbloquear funciones de memoria compartida de alto rendimiento en navegadores modernos.</p>
+                        </div>
+                    </div>
+                    <!-- Tech Item 3 -->
+                    <div class="flex gap-4">
+                        <div class="mt-1">
+                            <i data-lucide="shield-check" class="text-emerald-500 w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-white font-bold">Float32Array View</h4>
+                            <p class="text-slate-400 text-sm mt-1">Estructura de datos binaria optimizada: [X1, Y1, Pinch1, Rot1...] mapeada directamente en memoria.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Code Snippet -->
+            <div class="bg-[#1e1e24] rounded-lg border border-slate-700 overflow-hidden shadow-2xl font-mono text-xs md:text-sm">
+                <div class="bg-[#2d2d35] px-4 py-2 flex items-center gap-2 border-b border-slate-700">
+                    <i data-lucide="terminal" class="text-slate-400 w-3.5 h-3.5"></i>
+                    <span class="text-slate-300">audio-processor.js</span>
+                </div>
+                <div class="p-4 text-slate-300 overflow-x-auto">
+<pre class="whitespace-pre"><code class="language-javascript">// Lectura directa desde memoria compartida
+// Sin latencia de eventos
+process(inputs, outputs) {
+  // Read from Shared Buffer
+  const x = this.floatView[0]; 
+  const y = this.floatView[1];
+  
+  // Audio Rate Modulation (44100 times/sec)
+  const freq = 200 + (1 - y) * 600;
+  const mod = x * 8;
+  
+  // Synthesis Logic...
+}</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-slate-900 bg-[#050508]">
+        <div class="container mx-auto px-6 text-center">
+            <p class="text-slate-500 mb-4">Desarrollado con MediaPipe, Web Audio API y React.</p>
+            <div class="flex justify-center gap-6 text-sm font-mono text-cyan-500">
+                <span>#WebAudio</span>
+                <span>#ComputerVision</span>
+                <span>#JavaScript</span>
+            </div>
+            <p class="mt-8 text-xs text-slate-700">© 2024 Gesture Synthesizer Engine Project</p>
+        </div>
+    </footer>
+
+    <!-- Initialize Icons and Scroll Logic -->
+    <script>
+        // 1. Initialize Lucide Icons
+        lucide.createIcons();
+
+        // 2. Scroll Animation Logic
+        const navbar = document.getElementById('navbar');
+        
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                // Add scrolled styles
+                navbar.classList.add('bg-[#0a0a0f]/90', 'backdrop-blur-md', 'border-slate-800', 'py-4');
+                navbar.classList.remove('bg-transparent', 'border-transparent', 'py-6');
+            } else {
+                // Return to transparent
+                navbar.classList.remove('bg-[#0a0a0f]/90', 'backdrop-blur-md', 'border-slate-800', 'py-4');
+                navbar.classList.add('bg-transparent', 'border-transparent', 'py-6');
+            }
+        });
+    </script>
+</body>
+</html>

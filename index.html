@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gesture Synthesizer Engine</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        body { background: #0a0a0f; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.active { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        .status-dot.inactive { background: #ef4444; }
+        .status-dot.pending { background: #eab308; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        #videoCanvas { transform: scaleX(-1); }
+    </style>
+</head>
+<body class="min-h-screen text-white font-mono p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-2xl font-bold mb-2 text-cyan-400">🎛️ Gesture Synthesizer Engine</h1>
+        <p class="text-gray-500 mb-6">High-performance audio engine with SharedArrayBuffer data flow</p>
+        
+        <!-- Status Panel -->
+        <div class="bg-gray-900 rounded-lg p-4 mb-6 border border-gray-800">
+            <h2 class="text-sm text-gray-400 mb-3">SYSTEM STATUS</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div class="flex items-center gap-2">
+                    <div id="status-camera" class="status-dot inactive"></div>
+                    <span>Camera</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="status-mediapipe" class="status-dot inactive"></div>
+                    <span>MediaPipe</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="status-audio" class="status-dot inactive"></div>
+                    <span>Audio Worklet</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="status-sab" class="status-dot inactive"></div>
+                    <span>SharedArrayBuffer</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control -->
+        <button id="startBtn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded-lg font-bold mb-6 transition-colors">
+            ▶ Initialize Engine
+        </button>
+
+        <!-- Video Preview -->
+        <div class="mb-6">
+            <video id="video" class="hidden" autoplay playsinline></video>
+            <canvas id="videoCanvas" class="w-full max-w-md rounded-lg bg-gray-900 border border-gray-700"></canvas>
+        </div>
+
+        <!-- Console Output -->
+        <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+            <h2 class="text-sm text-gray-400 mb-3">DATA FLOW CONSOLE</h2>
+            <div id="console" class="h-48 overflow-y-auto text-xs text-green-400 font-mono space-y-1">
+                <div class="text-gray-500">Waiting for engine initialization...</div>
+            </div>
+        </div>
+
+        <!-- SharedArrayBuffer Structure -->
+        <div class="mt-6 bg-gray-900 rounded-lg p-4 border border-gray-800">
+            <h2 class="text-sm text-gray-400 mb-3">SHAREDARRAYBUFFER LAYOUT (Float32Array)</h2>
+            <div class="grid grid-cols-4 gap-2 text-xs">
+                <div class="bg-gray-800 p-2 rounded">[0] Hand1_X</div>
+                <div class="bg-gray-800 p-2 rounded">[1] Hand1_Y</div>
+                <div class="bg-gray-800 p-2 rounded">[2] Hand1_Pinch</div>
+                <div class="bg-gray-800 p-2 rounded">[3] Hand1_Rotation</div>
+                <div class="bg-gray-800 p-2 rounded">[4] Hand2_X</div>
+                <div class="bg-gray-800 p-2 rounded">[5] Hand2_Y</div>
+                <div class="bg-gray-800 p-2 rounded">[6] Hand2_Pinch</div>
+                <div class="bg-gray-800 p-2 rounded">[7] Hand2_Rotation</div>
+            </div>
+            <div id="liveData" class="mt-4 text-xs text-cyan-400"></div>
+        </div>
+
+        <!-- COOP/COEP Warning -->
+        <div id="sabWarning" class="hidden mt-6 bg-yellow-900/30 border border-yellow-600 rounded-lg p-4 text-yellow-400 text-sm">
+            <div class="font-bold mb-2">⚠️ Running in Fallback Mode (postMessage)</div>
+            <p class="mb-2">SharedArrayBuffer requires cross-origin isolation for zero-latency performance.</p>
+            <p class="mb-2"><strong>Current mode:</strong> Main Thread → AudioWorklet via postMessage (adds ~1-3ms latency)</p>
+            <p class="mb-2"><strong>Optimal mode:</strong> Main Thread → SharedArrayBuffer ← AudioWorklet (lock-free, ~0ms latency)</p>
+            <div class="mt-3 pt-3 border-t border-yellow-600/50">
+                <p class="mb-2 font-bold">To enable SharedArrayBuffer:</p>
+                <ol class="list-decimal list-inside space-y-1 mb-3">
+                    <li>Stop any running server</li>
+                    <li>Run: <code class="bg-gray-800 px-2 py-1 rounded text-cyan-400">node server.js</code></li>
+                    <li>Open: <code class="bg-gray-800 px-2 py-1 rounded text-cyan-400">http://127.0.0.1:5500</code> (use 127.0.0.1, not localhost!)</li>
+                    <li>Hard refresh: <code class="bg-gray-800 px-2 py-1 rounded text-cyan-400">Ctrl+Shift+R</code> (or Cmd+Shift+R on Mac)</li>
+                    <li>Or try in <strong>Incognito/Private</strong> window</li>
+                </ol>
+                <p class="text-xs text-gray-400">crossOriginIsolated: <span id="isolatedStatus" class="text-red-400">false</span></p>
+            </div>
+        </div>
+        
+        <!-- Inline status check that runs immediately -->
+        <script>
+            document.getElementById('isolatedStatus').textContent = window.crossOriginIsolated ? 'true ✓' : 'false ✗';
+            document.getElementById('isolatedStatus').className = window.crossOriginIsolated ? 'text-green-400' : 'text-red-400';
+        </script>
+    </div>
+
+    <!-- MediaPipe Hands (Vision Tasks - more reliable) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+
+    <!-- ============================================ -->
+    <!-- AUDIO WORKLET PROCESSOR (Inline as Blob) -->
+    <!-- ============================================ -->
+    <script id="synth-processor-src" type="text/js-worklet">
+        // synth-processor.js - Runs in AudioWorklet thread at 44.1kHz
+        
+        class GestureSynthProcessor extends AudioWorkletProcessor {
+            constructor(options) {
+                super();
+                this.sharedBuffer = null;
+                this.floatView = null;
+                this.useSharedArrayBuffer = false;
+                
+                // Fallback data storage
+                this.fallbackData = new Float32Array(8);
+                for (let i = 0; i < 8; i += 4) {
+                    this.fallbackData[i] = -1;
+                    this.fallbackData[i + 1] = -1;
+                }
+                
+                this.phase = 0;
+                this.phase2 = 0;
+                this.smoothX = 0.5;
+                this.smoothY = 0.5;
+                this.smoothPinch = 0;
+                
+                // Check if SAB was passed via processorOptions
+                if (options.processorOptions && options.processorOptions.sharedBuffer) {
+                    try {
+                        this.sharedBuffer = options.processorOptions.sharedBuffer;
+                        this.floatView = new Float32Array(this.sharedBuffer);
+                        this.useSharedArrayBuffer = true;
+                    } catch (err) {
+                        this.useSharedArrayBuffer = false;
+                    }
+                }
+                
+                // Send ready message immediately
+                this.port.postMessage({ 
+                    type: 'connected', 
+                    mode: this.useSharedArrayBuffer ? 'shared' : 'fallback' 
+                });
+                
+                // Listen for messages (fallback data)
+                this.port.onmessage = (e) => {
+                    if (e.data.type === 'hand-data') {
+                        // Fallback mode: receive data via postMessage
+                        const data = e.data.data;
+                        for (let i = 0; i < 8; i++) {
+                            this.fallbackData[i] = data[i];
+                        }
+                    }
+                };
+            }
+            
+            // Read data from either SAB or fallback
+            readFloat(index) {
+                if (this.useSharedArrayBuffer && this.floatView) {
+                    return this.floatView[index];
+                } else {
+                    return this.fallbackData[index];
+                }
+            }
+            
+            process(inputs, outputs, parameters) {
+                const output = outputs[0];
+                if (!output || output.length === 0) return true;
+                
+                const channel = output[0];
+                
+                // Read hand data (from SAB or fallback)
+                const hand1X = this.readFloat(0);
+                const hand1Y = this.readFloat(1);
+                const hand1Pinch = this.readFloat(2);
+                const hand1Rotation = this.readFloat(3);
+                
+                // Check if hand is detected
+                const handDetected = hand1X >= 0 && hand1Y >= 0;
+                
+                // Smooth the values to prevent audio clicks
+                const smoothing = 0.995;
+                this.smoothX = this.smoothX * smoothing + (handDetected ? hand1X : 0.5) * (1 - smoothing);
+                this.smoothY = this.smoothY * smoothing + (handDetected ? hand1Y : 0.5) * (1 - smoothing);
+                this.smoothPinch = this.smoothPinch * smoothing + (handDetected ? hand1Pinch : 0) * (1 - smoothing);
+                
+                // Map hand position to frequency (200Hz - 800Hz)
+                const baseFreq = 200 + (1 - this.smoothY) * 600;
+                
+                // Modulation from X position
+                const modFreq = 2 + this.smoothX * 8;
+                
+                // Gain controlled by pinch (0 - 0.25)
+                const gain = this.smoothPinch * 0.25;
+                
+                // Generate audio samples
+                for (let i = 0; i < channel.length; i++) {
+                    // FM synthesis with gesture control
+                    const modulator = Math.sin(this.phase2 * 2 * Math.PI);
+                    const freqMod = baseFreq + modulator * 30 * this.smoothX;
+                    
+                    // Main oscillator (sine wave with FM)
+                    const sample = Math.sin(this.phase * 2 * Math.PI) * gain;
+                    
+                    channel[i] = sample;
+                    
+                    // Increment phases
+                    this.phase += freqMod / sampleRate;
+                    this.phase2 += modFreq / sampleRate;
+                    
+                    // Wrap phases to prevent floating point issues
+                    if (this.phase > 1) this.phase -= 1;
+                    if (this.phase2 > 1) this.phase2 -= 1;
+                }
+                
+                return true; // Keep processor alive
+            }
+        }
+        
+        registerProcessor('gesture-synth', GestureSynthProcessor);
+    </script>
+
+    <!-- ============================================ -->
+    <!-- MAIN THREAD ORCHESTRATOR -->
+    <!-- ============================================ -->
+    <script type="module">
+        // main.js - Orchestrator running on main thread
+        // MediaPipe runs on main thread (requires DOM/WebGL)
+        // SharedArrayBuffer used for lock-free audio communication
+        
+        class GestureSynthesizerEngine {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.canvas = document.getElementById('videoCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.consoleEl = document.getElementById('console');
+                this.liveDataEl = document.getElementById('liveData');
+                
+                // SharedArrayBuffer: 8 floats (2 hands × 4 values each)
+                this.sharedBuffer = null;
+                this.floatView = null;
+                this.useSharedArrayBuffer = false;
+                
+                // Fallback data storage
+                this.fallbackData = new Float32Array(8);
+                for (let i = 0; i < 8; i += 4) {
+                    this.fallbackData[i] = -1;
+                    this.fallbackData[i + 1] = -1;
+                }
+                
+                this.hands = null;
+                this.audioContext = null;
+                this.synthNode = null;
+                
+                this.isRunning = false;
+                
+                // MediaPipe landmark indices
+                this.THUMB_TIP = 4;
+                this.INDEX_TIP = 8;
+                this.WRIST = 0;
+                this.INDEX_MCP = 5;
+                this.PINKY_MCP = 17;
+            }
+            
+            log(message, type = 'info') {
+                const colors = {
+                    info: 'text-green-400',
+                    warn: 'text-yellow-400',
+                    error: 'text-red-400',
+                    data: 'text-cyan-400'
+                };
+                const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+                const div = document.createElement('div');
+                div.className = colors[type] || colors.info;
+                div.textContent = `[${time}] ${message}`;
+                this.consoleEl.appendChild(div);
+                this.consoleEl.scrollTop = this.consoleEl.scrollHeight;
+                console.log(`[GestureSynth] ${message}`);
+            }
+            
+            setStatus(id, status) {
+                const el = document.getElementById(`status-${id}`);
+                if (el) {
+                    el.className = `status-dot ${status}`;
+                }
+            }
+            
+            // Check if SharedArrayBuffer is available
+            checkSharedArrayBufferSupport() {
+                // First check if we're in a crossOriginIsolated context
+                this.log(`crossOriginIsolated: ${window.crossOriginIsolated}`, 'info');
+                
+                if (!window.crossOriginIsolated) {
+                    this.log('Not crossOriginIsolated - SharedArrayBuffer disabled by browser', 'warn');
+                    this.log('Make sure you are accessing via http://localhost:3000', 'warn');
+                    return false;
+                }
+                
+                try {
+                    new SharedArrayBuffer(1);
+                    this.log('SharedArrayBuffer is available!', 'info');
+                    return true;
+                } catch (e) {
+                    this.log(`SharedArrayBuffer error: ${e.message}`, 'error');
+                    return false;
+                }
+            }
+            
+            // Initialize SharedArrayBuffer or fallback
+            initSharedBuffer() {
+                this.useSharedArrayBuffer = this.checkSharedArrayBufferSupport();
+                
+                if (this.useSharedArrayBuffer) {
+                    // 8 float32 values = 32 bytes
+                    this.sharedBuffer = new SharedArrayBuffer(8 * 4);
+                    this.floatView = new Float32Array(this.sharedBuffer);
+                    
+                    // Initialize to -1 (no hand detected)
+                    for (let i = 0; i < 8; i += 4) {
+                        this.floatView[i] = -1;
+                        this.floatView[i + 1] = -1;
+                    }
+                    
+                    this.setStatus('sab', 'active');
+                    this.log('SharedArrayBuffer initialized (32 bytes, 8 float32 slots)');
+                } else {
+                    this.setStatus('sab', 'pending');
+                    this.log('Fallback mode: Using postMessage for data transfer', 'warn');
+                    document.getElementById('sabWarning').classList.remove('hidden');
+                }
+                
+                return true;
+            }
+            
+            // Calculate pinch distance
+            calculatePinch(landmarks) {
+                const thumb = landmarks[this.THUMB_TIP];
+                const index = landmarks[this.INDEX_TIP];
+                const distance = Math.sqrt(
+                    Math.pow(thumb.x - index.x, 2) + 
+                    Math.pow(thumb.y - index.y, 2)
+                );
+                return distance < 0.05 ? 1.0 : (distance > 0.15 ? 0.0 : 1.0 - (distance - 0.05) / 0.10);
+            }
+            
+            // Calculate hand rotation
+            calculateRotation(landmarks) {
+                const indexMcp = landmarks[this.INDEX_MCP];
+                const pinkyMcp = landmarks[this.PINKY_MCP];
+                const dx = indexMcp.x - pinkyMcp.x;
+                const dy = indexMcp.y - pinkyMcp.y;
+                return Math.atan2(dy, dx);
+            }
+            
+            // Write hand data to buffer
+            writeHandData(handIndex, x, y, pinch, rotation) {
+                const offset = handIndex * 4;
+                
+                if (this.useSharedArrayBuffer && this.floatView) {
+                    // Direct write to SharedArrayBuffer (visible to AudioWorklet)
+                    this.floatView[offset + 0] = x;
+                    this.floatView[offset + 1] = y;
+                    this.floatView[offset + 2] = pinch;
+                    this.floatView[offset + 3] = rotation;
+                } else {
+                    // Fallback buffer
+                    this.fallbackData[offset + 0] = x;
+                    this.fallbackData[offset + 1] = y;
+                    this.fallbackData[offset + 2] = pinch;
+                    this.fallbackData[offset + 3] = rotation;
+                }
+            }
+            
+            // Send fallback data to AudioWorklet
+            sendFallbackData() {
+                if (!this.useSharedArrayBuffer && this.synthNode) {
+                    this.synthNode.port.postMessage({
+                        type: 'hand-data',
+                        data: Array.from(this.fallbackData)
+                    });
+                }
+            }
+            
+            // Process MediaPipe results
+            onResults(results) {
+                // Draw camera feed
+                this.ctx.save();
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw video frame (use results.image if available, otherwise video element)
+                const imageSrc = results.image || this.video;
+                this.ctx.drawImage(imageSrc, 0, 0, this.canvas.width, this.canvas.height);
+                
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    results.multiHandLandmarks.forEach((landmarks, index) => {
+                        if (index < 2) {
+                            const wrist = landmarks[this.WRIST];
+                            const pinch = this.calculatePinch(landmarks);
+                            const rotation = this.calculateRotation(landmarks);
+                            
+                            this.writeHandData(index, wrist.x, wrist.y, pinch, rotation);
+                            
+                            // Draw hand landmarks
+                            this.ctx.fillStyle = pinch > 0.5 ? '#22c55e' : '#ef4444';
+                            landmarks.forEach(point => {
+                                this.ctx.beginPath();
+                                this.ctx.arc(
+                                    point.x * this.canvas.width, 
+                                    point.y * this.canvas.height, 
+                                    3, 0, 2 * Math.PI
+                                );
+                                this.ctx.fill();
+                            });
+                            
+                            // Draw pinch indicator
+                            const thumb = landmarks[this.THUMB_TIP];
+                            const indexTip = landmarks[this.INDEX_TIP];
+                            this.ctx.strokeStyle = pinch > 0.5 ? '#22c55e' : '#eab308';
+                            this.ctx.lineWidth = 2;
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(thumb.x * this.canvas.width, thumb.y * this.canvas.height);
+                            this.ctx.lineTo(indexTip.x * this.canvas.width, indexTip.y * this.canvas.height);
+                            this.ctx.stroke();
+                        }
+                    });
+                    
+                    // Clear unused hand slots
+                    for (let i = results.multiHandLandmarks.length; i < 2; i++) {
+                        this.writeHandData(i, -1, -1, 0, 0);
+                    }
+                } else {
+                    // No hands detected
+                    this.writeHandData(0, -1, -1, 0, 0);
+                    this.writeHandData(1, -1, -1, 0, 0);
+                }
+                
+                this.ctx.restore();
+                
+                // Send data via postMessage in fallback mode
+                this.sendFallbackData();
+            }
+            
+            // Initialize camera
+            async initCamera() {
+                this.setStatus('camera', 'pending');
+                this.log('Requesting camera access...');
+                
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            frameRate: { ideal: 30 }
+                        },
+                        audio: false
+                    });
+                    
+                    this.video.srcObject = stream;
+                    
+                    // Wait for video to be ready
+                    await new Promise((resolve, reject) => {
+                        this.video.onloadedmetadata = () => {
+                            this.video.play().then(resolve).catch(reject);
+                        };
+                        this.video.onerror = reject;
+                        // Timeout after 5 seconds
+                        setTimeout(() => reject(new Error('Video load timeout')), 5000);
+                    });
+                    
+                    // Wait for first frame
+                    await new Promise((resolve) => {
+                        const checkReady = () => {
+                            if (this.video.readyState >= 2) {
+                                resolve();
+                            } else {
+                                requestAnimationFrame(checkReady);
+                            }
+                        };
+                        checkReady();
+                    });
+                    
+                    // Set canvas size
+                    this.canvas.width = this.video.videoWidth || 640;
+                    this.canvas.height = this.video.videoHeight || 480;
+                    
+                    this.setStatus('camera', 'active');
+                    this.log(`Camera initialized: ${this.video.videoWidth}x${this.video.videoHeight}`);
+                    return true;
+                } catch (err) {
+                    this.setStatus('camera', 'inactive');
+                    this.log(`Camera error: ${err.message}`, 'error');
+                    return false;
+                }
+            }
+            
+            // Initialize MediaPipe Hands
+            async initMediaPipe() {
+                this.setStatus('mediapipe', 'pending');
+                this.log('Loading MediaPipe Hands...');
+                
+                return new Promise((resolve) => {
+                    try {
+                        this.hands = new Hands({
+                            locateFile: (file) => {
+                                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+                            }
+                        });
+                        
+                        this.hands.setOptions({
+                            maxNumHands: 2,
+                            modelComplexity: 1,
+                            minDetectionConfidence: 0.5,
+                            minTrackingConfidence: 0.5
+                        });
+                        
+                        this.hands.onResults((results) => this.onResults(results));
+                        
+                        // Initialize MediaPipe by sending a test frame
+                        this.hands.initialize().then(() => {
+                            this.setStatus('mediapipe', 'active');
+                            this.log('MediaPipe Hands initialized');
+                            
+                            // Start the frame processing loop
+                            this.startFrameLoop();
+                            resolve(true);
+                        }).catch((err) => {
+                            this.setStatus('mediapipe', 'inactive');
+                            this.log(`MediaPipe init error: ${err.message}`, 'error');
+                            resolve(false);
+                        });
+                        
+                    } catch (err) {
+                        this.setStatus('mediapipe', 'inactive');
+                        this.log(`MediaPipe error: ${err.message}`, 'error');
+                        resolve(false);
+                    }
+                });
+            }
+            
+            // Frame processing loop using requestAnimationFrame
+            startFrameLoop() {
+                const processFrame = async () => {
+                    if (!this.isRunning) return;
+                    
+                    if (this.video.readyState >= 2) {
+                        try {
+                            await this.hands.send({ image: this.video });
+                        } catch (err) {
+                            // Ignore frame errors, continue processing
+                        }
+                    }
+                    
+                    requestAnimationFrame(processFrame);
+                };
+                
+                requestAnimationFrame(processFrame);
+                this.log('Frame processing loop started');
+            }
+            
+            // Initialize AudioWorklet
+            async initAudioWorklet() {
+                this.setStatus('audio', 'pending');
+                this.log('Initializing AudioContext and Worklet...');
+                
+                try {
+                    this.audioContext = new AudioContext({ sampleRate: 44100 });
+                    
+                    // Resume audio context (required for autoplay policy)
+                    if (this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                    }
+                    
+                    // Create worklet from inline script
+                    const workletCode = document.getElementById('synth-processor-src').textContent;
+                    const blob = new Blob([workletCode], { type: 'application/javascript' });
+                    const workletUrl = URL.createObjectURL(blob);
+                    
+                    this.log('Loading AudioWorklet module...');
+                    await this.audioContext.audioWorklet.addModule(workletUrl);
+                    this.log('AudioWorklet module loaded');
+                    
+                    // Create the synth node with processorOptions (more reliable than postMessage)
+                    const processorOptions = {};
+                    if (this.useSharedArrayBuffer && this.sharedBuffer) {
+                        processorOptions.sharedBuffer = this.sharedBuffer;
+                    }
+                    
+                    this.synthNode = new AudioWorkletNode(this.audioContext, 'gesture-synth', {
+                        processorOptions: processorOptions
+                    });
+                    this.synthNode.connect(this.audioContext.destination);
+                    
+                    // Wait for connected message with timeout
+                    return new Promise((resolve) => {
+                        const timeout = setTimeout(() => {
+                            this.log('AudioWorklet timeout - continuing anyway', 'warn');
+                            this.setStatus('audio', 'active');
+                            resolve(true);
+                        }, 2000);
+                        
+                        this.synthNode.port.onmessage = (e) => {
+                            if (e.data.type === 'connected') {
+                                clearTimeout(timeout);
+                                this.setStatus('audio', 'active');
+                                const mode = e.data.mode;
+                                this.log(`AudioWorklet connected @ ${this.audioContext.sampleRate}Hz (${mode} mode)`);
+                                resolve(true);
+                            }
+                        };
+                    });
+                } catch (err) {
+                    this.log(`AudioWorklet error: ${err.message}`, 'error');
+                    this.setStatus('audio', 'inactive');
+                    return false;
+                }
+            }
+            
+            // Start data monitoring
+            startDataMonitoring() {
+                const modeLabel = this.useSharedArrayBuffer ? 'SharedArrayBuffer' : 'Fallback';
+                this.log(`Starting ${modeLabel} monitoring...`);
+                
+                setInterval(() => {
+                    let hand1X, hand1Y, hand1Pinch, hand1Rot;
+                    let hand2X, hand2Y, hand2Pinch, hand2Rot;
+                    
+                    if (this.useSharedArrayBuffer && this.floatView) {
+                        hand1X = this.floatView[0];
+                        hand1Y = this.floatView[1];
+                        hand1Pinch = this.floatView[2];
+                        hand1Rot = this.floatView[3];
+                        
+                        hand2X = this.floatView[4];
+                        hand2Y = this.floatView[5];
+                        hand2Pinch = this.floatView[6];
+                        hand2Rot = this.floatView[7];
+                    } else {
+                        hand1X = this.fallbackData[0];
+                        hand1Y = this.fallbackData[1];
+                        hand1Pinch = this.fallbackData[2];
+                        hand1Rot = this.fallbackData[3];
+                        
+                        hand2X = this.fallbackData[4];
+                        hand2Y = this.fallbackData[5];
+                        hand2Pinch = this.fallbackData[6];
+                        hand2Rot = this.fallbackData[7];
+                    }
+                    
+                    const hand1Active = hand1X >= 0;
+                    const hand2Active = hand2X >= 0;
+                    
+                    const modeIndicator = this.useSharedArrayBuffer ? 
+                        '<span class="text-green-400">●</span> SAB Mode (Zero-Latency)' : 
+                        '<span class="text-yellow-400">●</span> Fallback Mode (postMessage)';
+                    
+                    this.liveDataEl.innerHTML = `
+                        <div class="mb-2 text-xs">${modeIndicator}</div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-gray-800 p-2 rounded ${hand1Active ? 'border border-cyan-500' : ''}">
+                                <div class="text-gray-400 mb-1">Hand 1 ${hand1Active ? '✋' : '—'}</div>
+                                <div>X: ${hand1Active ? hand1X.toFixed(3) : '---'}</div>
+                                <div>Y: ${hand1Active ? hand1Y.toFixed(3) : '---'}</div>
+                                <div>Pinch: ${hand1Active ? hand1Pinch.toFixed(2) : '---'}</div>
+                                <div>Rot: ${hand1Active ? (hand1Rot * 180/Math.PI).toFixed(1) + '°' : '---'}</div>
+                            </div>
+                            <div class="bg-gray-800 p-2 rounded ${hand2Active ? 'border border-cyan-500' : ''}">
+                                <div class="text-gray-400 mb-1">Hand 2 ${hand2Active ? '✋' : '—'}</div>
+                                <div>X: ${hand2Active ? hand2X.toFixed(3) : '---'}</div>
+                                <div>Y: ${hand2Active ? hand2Y.toFixed(3) : '---'}</div>
+                                <div>Pinch: ${hand2Active ? hand2Pinch.toFixed(2) : '---'}</div>
+                                <div>Rot: ${hand2Active ? (hand2Rot * 180/Math.PI).toFixed(1) + '°' : '---'}</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Console output for verification
+                    if (hand1Active) {
+                        console.log(`[${this.useSharedArrayBuffer ? 'SAB' : 'MSG'}] Hand1: X=${hand1X.toFixed(3)}, Y=${hand1Y.toFixed(3)}, Pinch=${hand1Pinch.toFixed(2)}`);
+                    }
+                }, 100);
+            }
+            
+            // Main initialization
+            async initialize() {
+                this.consoleEl.innerHTML = '';
+                this.log('=== GESTURE SYNTHESIZER ENGINE INIT ===');
+                
+                // Initialize SharedArrayBuffer or fallback
+                if (!this.initSharedBuffer()) {
+                    return false;
+                }
+                
+                // Initialize camera
+                if (!await this.initCamera()) {
+                    return false;
+                }
+                
+                // Initialize audio worklet
+                if (!await this.initAudioWorklet()) {
+                    return false;
+                }
+                
+                // Initialize MediaPipe (runs on main thread, requires DOM)
+                this.isRunning = true;
+                if (!await this.initMediaPipe()) {
+                    return false;
+                }
+                
+                // Start monitoring
+                this.startDataMonitoring();
+                
+                this.log('=== ENGINE RUNNING ===');
+                this.log('Make a PINCH gesture to produce sound!', 'data');
+                this.log('Move your hand UP/DOWN to change pitch', 'data');
+                
+                if (!this.useSharedArrayBuffer) {
+                    this.log('Run: node server.js for optimal performance', 'warn');
+                }
+                
+                return true;
+            }
+        }
+        
+        // Initialize on button click
+        document.getElementById('startBtn').addEventListener('click', async function() {
+            this.disabled = true;
+            this.textContent = 'Initializing...';
+            
+            const engine = new GestureSynthesizerEngine();
+            const success = await engine.initialize();
+            
+            if (success) {
+                this.textContent = '✓ Engine Running';
+                this.className = 'bg-green-600 px-6 py-3 rounded-lg font-bold mb-6 cursor-not-allowed opacity-75';
+            } else {
+                this.textContent = '✗ Initialization Failed';
+                this.className = 'bg-red-600 px-6 py-3 rounded-lg font-bold mb-6';
+                this.disabled = false;
+            }
+        });
+        
+        // Check cross-origin isolation status on page load
+        (function() {
+            const isolated = window.crossOriginIsolated;
+            console.log('%c[COOP/COEP Status]', 'font-weight: bold', {
+                crossOriginIsolated: isolated,
+                SharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined'
+            });
+            
+            if (!isolated) {
+                console.warn('⚠️ Page is NOT cross-origin isolated!');
+                console.warn('Make sure you are running: node server.js');
+                console.warn('And accessing: http://localhost:3000');
+                console.warn('Do NOT open index.html directly as a file');
+            } else {
+                console.log('✅ Cross-origin isolation is enabled - SharedArrayBuffer available!');
+            }
+        })();
+        
+        // Log architecture info
+        console.log(`
+╔════════════════════════════════════════════════════════════╗
+║           GESTURE SYNTHESIZER ENGINE ARCHITECTURE          ║
+╠════════════════════════════════════════════════════════════╣
+║                                                            ║
+║  ┌─────────────────────────────────────────────────────┐   ║
+║  │              MAIN THREAD                            │   ║
+║  │  ┌─────────────┐    ┌─────────────────────────┐     │   ║
+║  │  │   Camera    │───▶│   MediaPipe Hands       │     │   ║
+║  │  │   (WebRTC)  │    │   (WebGL accelerated)   │     │   ║
+║  │  └─────────────┘    └───────────┬─────────────┘     │   ║
+║  │                                 │                   │   ║
+║  │                    Writes @ 30Hz│                   │   ║
+║  │                                 ▼                   │   ║
+║  │         ╔═══════════════════════════════════╗       │   ║
+║  │         ║     SharedArrayBuffer (32B)       ║       │   ║
+║  │         ║  [X1,Y1,P1,R1,X2,Y2,P2,R2]        ║       │   ║
+║  │         ╚═══════════════════════════════════╝       │   ║
+║  └─────────────────────────────────────────────────────┘   ║
+║                            ▲                               ║
+║                            │ Reads @ 44.1kHz               ║
+║                            │ (lock-free)                   ║
+║                   ┌────────┴────────┐                      ║
+║                   │  AudioWorklet   │ ◀── Separate Thread  ║
+║                   │ (FM Synthesis)  │                      ║
+║                   └─────────────────┘                      ║
+║                                                            ║
+║  ✓ MediaPipe on main thread (requires WebGL)               ║
+║  ✓ Audio reads SharedArrayBuffer directly                  ║
+║  ✓ No postMessage for continuous audio-rate data           ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝
+        `);
+    </script>
+</body>
+</html>
