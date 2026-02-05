@@ -96,8 +96,8 @@ The 32-byte SharedArrayBuffer contains 8 Float32 values:
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd gesture-engine-shared-buffer
+   git clone [<repository-url>](https://github.com/intermosh/kinetograf-core)
+   cd kinetograf-core
    ```
 
 2. **Start the server** (choose one option):
@@ -243,3 +243,4 @@ Contributions welcome! Areas of interest:
 - **Tailwind CSS**: Utility-first CSS framework</content>
 
 <parameter name="filePath">c:\Users\Krank\Local\archive gesture-engine-shared-buffer\README.md
+
